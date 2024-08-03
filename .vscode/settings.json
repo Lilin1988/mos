@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "mos_kernel.h": "c",
+        "mos_ports.h": "c"
+    }
+}

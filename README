@@ -1,0 +1,89 @@
+MOS is an abbreviation of Medical Operation System. It is designed for use in safety-critial applications 
+such as medical device, automotive and industries.
+
+Copyright (C) <2024>  <LL2524460@qq.com, Phone: 139-8424-5508>
+
+This file is part of mos(medical operation system) is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or any later version.
+
+This file is part of mos(medical operation system) is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this file which is part of mos(medical operation system).  
+If not, see <https://www.gnu.org/licenses/>.
+
+
+1.  Concepts
+
+MOS is a light, preemptive, non-blocking RTOS which can be adapted into variable hardware platforms. It is designed to replace the traditional "Bare Metal" architecture by a event-driven kernel. 
+
+MOS is quite different from common commercial RTOS such as FreeRTOS or RT-Thread. It takes Single-Stack mechanism to implement task scheduling. For task preemptions, it only supports "synchronous preemption" and abandons "asynchronous preemption" for maximum guarantee of real-time performance.
+
+2.  File Tree
+
+        mos
+        │  COPYING      ----------------------------------  GPL V3
+        │  mos.h        ----------------------------------  Top level header of mos
+        │  README       ----------------------------------  This file
+        │
+        ├─.vscode       ----------------------------------  Ignoring this folder for usging mos
+        │      c_cpp_properties.json
+        │      settings.json
+        │
+        ├─kernel
+        │      mos_kernel.c     --------------------------  mos kernel operations 
+        │      mos_kernel.h
+        │      mos_queue.c      --------------------------  Common queue functions of mos
+        │      mos_queue.h
+        │
+        └─ports
+                mos_ports.h     --------------------------  Hardware related portables 
+
+3.  How-To-Use
+
+    3.1 Adding all source into your own project. It's ok to ignore all files under folder of ".vscode".
+
+    3.2 Modify file "mos_ports.h" to adapte your own hardware platform:
+
+        A: All data types;
+        B: Interrupt enable/disable;
+        C: Method to determine whether a routine is invoked under interrput routine.
+
+        Now, a sample is ready for Arm Cortex-M machine.
+
+    3.3 Modify macros defined in "mos.h" to adapte your application:
+
+        MOS_MAX_TASK:   maximal tasks can be supported by mos
+        MOS_MAX_EVENT:  maximal events can be supported by each task
+
+    3.4 Adding your codes to utilize mos
+
+        A:  Call mos_kernel_init to initialize mos kernel. Successfully if return 0.
+
+        B:  Create tasks by calling mos_kernel_task_create. For each task, only three members should be identified:
+
+            priority:       task priority, min = 0, max = MAX(INT32). larger number means higher task priority.
+            init_handle:    initial function for task, it is called once successing to create a task
+            event_handle:   core implementation of task, it must be a Run-To-Complete function instead of endless-loops 
+
+            Once successing to create a task, a unique task id will be assigned and returned, otherwise, negative number will return.           
+
+        C:  Register IRQs to mos kernel by calling mos_kernel_irq_create. 
+
+            Once successing to register, a unique task id will be assigned and returned, otherwise, negative number will return. 
+            
+
+        D: Call mos_kernel_run to start mos scheduling
+
+
+    3.5 Publish event to tasks
+
+        Call mos_kernel_event_publish from Wherever you want to publish a event to specified task.
+
+4.  Issues or bugs report
+
+    Mail to LL2524460@qq.com for feedback any findings.
