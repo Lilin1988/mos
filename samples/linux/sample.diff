@@ -1,0 +1,59 @@
+diff --git a/kernel/mos_kernel.c b/kernel/mos_kernel.c
+index 748446e..16568d6 100644
+--- a/kernel/mos_kernel.c
++++ b/kernel/mos_kernel.c
+@@ -42,19 +42,21 @@ static mos_task_ctl_t mos_task_controller[MOS_MAX_TASK] = { 0 };
+ void mos_enter_critial(void)
+ {
+     MOS_EN_IRQ();
+-    irq_nest_count++;
++    // MOS_EN_IRQ();
++    // irq_nest_count++;
+ }
+ 
+ void mos_exit_critial(void)
+ {
+-    MOS_EN_IRQ();
+-    {
+-        if(--irq_nest_count <= 0)
+-        {
+-            irq_nest_count = 0;
+-            MOS_DIS_IRQ();
+-        }
+-    }
++    MOS_DIS_IRQ();
++    // MOS_EN_IRQ();
++    // {
++    //     if(--irq_nest_count <= 0)
++    //     {
++    //         irq_nest_count = 0;
++    //         MOS_DIS_IRQ();
++    //     }
++    // }
+ }
+ 
+ mos_s32_t mos_kernel_init(void)
+diff --git a/ports/mos_ports.h b/ports/mos_ports.h
+index 647a5c8..f8ee775 100644
+--- a/ports/mos_ports.h
++++ b/ports/mos_ports.h
+@@ -32,9 +32,18 @@ typedef unsigned long long  mos_u64_t;
+ typedef float               mos_float32_t;
+ typedef double              mos_float64_t;    
+ 
++#ifdef _SAMPLE_LINUX_
++extern void port_enable_irq();
++extern void port_disable_irq();
++
++#define MOS_EN_IRQ()        (port_enable_irq())
++#define MOS_DIS_IRQ()       (port_disable_irq())
++#define IS_IN_INTTERUPT     (1) 
++#else
+ #define MOS_EN_IRQ()        (__enable_irq())
+ #define MOS_DIS_IRQ()       (__disable_irq())
+ 
+ #define IS_IN_INTTERUPT()   (__get_IPSR() == 0 ? 0 : 1)
++#endif
+ 
+ #endif
+\ No newline at end of file
