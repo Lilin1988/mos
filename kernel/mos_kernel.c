@@ -385,40 +385,24 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
     }
     else
     {
-        task_event.event = event;
-        task_event.sender = sender;
-
-        mos_enter_critial();
+        if(receiver >= MOS_MAX_TASK)
         {
-            is_daemon_task = mos_task_controller[receiver].is_daemon_task;
+            ret = -1;
         }
-        mos_exit_critial();
-
-        if(is_daemon_task == 0)
+        else
         {
-            if(IS_IN_INTTERUPT())
+            task_event.event = event;
+            task_event.sender = sender;
+
+            mos_enter_critial();
             {
-                if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
-                {
-                    ret = 0;
-                }
-                else
-                {
-                    ret = -1;
-                }
+                is_daemon_task = mos_task_controller[receiver].is_daemon_task;
             }
-            else
+            mos_exit_critial();
+
+            if(is_daemon_task == 0)
             {
-                if(mos_task_controller[receiver].priority > mos_task_controller[sender].priority)
-                {
-                    mos_enter_critial();
-                    {
-                        event_handle = mos_task_controller[receiver].event_handle;
-                        ret = 0;
-                    }
-                    mos_exit_critial();  
-                }
-                else
+                if(IS_IN_INTTERUPT())
                 {
                     if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
                     {
@@ -427,14 +411,37 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
                     else
                     {
                         ret = -1;
-                    }                    
-                }                
-            }  
-        }
-        else
-        {
-            ret = -2;
-        }  
+                    }
+                }
+                else
+                {
+                    if(mos_task_controller[receiver].priority > mos_task_controller[sender].priority)
+                    {
+                        mos_enter_critial();
+                        {
+                            event_handle = mos_task_controller[receiver].event_handle;
+                            ret = 0;
+                        }
+                        mos_exit_critial();  
+                    }
+                    else
+                    {
+                        if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
+                        {
+                            ret = 0;
+                        }
+                        else
+                        {
+                            ret = -1;
+                        }                    
+                    }                
+                }  
+            }
+            else
+            {
+                ret = -2;
+            } 
+        } 
     }
      
     if(event_handle != MOS_NULL_PTR)
