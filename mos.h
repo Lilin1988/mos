@@ -69,5 +69,5 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
 void mos_kernel_isr_switch_in(void);
 void mos_kernel_isr_switch_out(void);
 void mos_kernel_cpu_usage_monitor(void);
-
+void mos_kernel_get_cpu_usage(mos_cpu_usage_t *cpu_usage);
 #endif

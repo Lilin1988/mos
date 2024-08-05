@@ -118,6 +118,17 @@ void mos_kernel_cpu_usage_monitor(void)
     mos_exit_critial(); 
 }
 
+void mos_kernel_get_cpu_usage(mos_cpu_usage_t *cpu_usage)
+{
+    mos_enter_critial();
+    {
+        cpu_usage->current = mos_cpu_usage.current;
+        cpu_usage->minimum = mos_cpu_usage.minimum;
+        cpu_usage->maximum = mos_cpu_usage.maximum;
+    }
+    mos_exit_critial(); 
+}
+
 mos_s32_t mos_kernel_init(void)
 {
     mos_s32_t ret = 0;
@@ -231,7 +242,6 @@ mos_s32_t mos_kernel_run(void)
 
     return ret;
 }
-
 
 mos_task_id_t mos_kernel_task_create(mos_task_t task)
 {
