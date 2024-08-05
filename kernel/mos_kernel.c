@@ -29,14 +29,16 @@ typedef struct
 typedef struct
 {
     mos_queue_t events; 
-    mos_task_pri_t priority;        
+    mos_task_pri_t priority;  
+    mos_s32_t is_daemon_task;      
     mos_task_init_handle_t init_handle;
     mos_task_event_handle_t event_handle;
-    mos_evt_t events_buffer[MOS_MAX_EVENT];
+    mos_evt_t events_buffer[MOS_MAX_EVENT];    
 }mos_task_ctl_t;
 
 static mos_s32_t irq_nest_count = 0;
 static mos_task_id_t task_id_count = 0;
+static mos_s32_t daemon_task_count = 0;
 static mos_task_ctl_t mos_task_controller[MOS_MAX_TASK] = { 0 };
 
 static mos_u32_t mos_idle_task_flag = 0;
@@ -100,7 +102,8 @@ void mos_kernel_cpu_usage_monitor(void)
             {
                 mos_cpu_usage.maximum = mos_cpu_usage.current;
             }
-            else if(mos_cpu_usage.current <= mos_cpu_usage.minimum)
+            
+			if(mos_cpu_usage.current <= mos_cpu_usage.minimum)
             {
                 mos_cpu_usage.minimum = mos_cpu_usage.current;
             }
@@ -146,6 +149,7 @@ mos_s32_t mos_kernel_init(void)
         for(index = 0; index < MOS_MAX_TASK; index++)
         {
             mos_task_controller[index].priority = 0;
+            mos_task_controller[index].is_daemon_task = 0;
             mos_task_controller[index].init_handle = MOS_NULL_PTR;
             mos_task_controller[index].event_handle = MOS_NULL_PTR;
 
@@ -167,10 +171,13 @@ mos_s32_t mos_kernel_init(void)
 mos_s32_t mos_kernel_run(void)
 {
     mos_s32_t ret = 0;
-    mos_s32_t index = 0;    
+    mos_s32_t index = 0;  
+    mos_s32_t index_s = 0;   
     mos_s32_t task_count = 0;
     mos_task_id_t task_id = 0;
-    mos_evt_t task_event = { 0 };    
+    mos_evt_t task_event = { 0 }; 
+    mos_s32_t is_daemon_task = 0;
+    mos_s32_t daemon_task_index = 0;   
     mos_task_pri_t task_priority = 0;
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
 
@@ -193,24 +200,33 @@ mos_s32_t mos_kernel_run(void)
 
             for(index = 0; index < MOS_MAX_TASK; index++)
             {
-                if(mos_queue_try_pop(&mos_task_controller[index].events, &task_event, sizeof(mos_evt_t)) == 0)
+                mos_enter_critial();
                 {
-                    mos_enter_critial();
-                    {                    
-                        if(mos_task_controller[index].priority >= task_priority)
-                        {
-                            task_id = index;
-                            task_priority = mos_task_controller[index].priority;
+                    is_daemon_task = mos_task_controller[index].is_daemon_task;
+                }
+                mos_exit_critial();       
+
+                if(is_daemon_task == 0)
+                {
+                    if(mos_queue_try_pop(&mos_task_controller[index].events, &task_event, sizeof(mos_evt_t)) == 0)
+                    {
+                        mos_enter_critial();
+                        {                    
+                            if(mos_task_controller[index].priority >= task_priority)
+                            {
+                                task_id = index;
+                                task_priority = mos_task_controller[index].priority;
+                            }
                         }
+                        mos_exit_critial();                    
                     }
-                    mos_exit_critial();                    
                 }
             }
 			
-            if(task_id >= 0)
-            {
-                event_handle = MOS_NULL_PTR;
+            event_handle = MOS_NULL_PTR;
 
+            if(task_id >= 0)
+            {                
                 if(mos_queue_pop(&mos_task_controller[task_id].events, &task_event, sizeof(mos_evt_t)) == 0)
                 {
                     mos_enter_critial();
@@ -218,25 +234,53 @@ mos_s32_t mos_kernel_run(void)
                         event_handle = mos_task_controller[task_id].event_handle;
                     }
                     mos_exit_critial();
-                }                
-				
-				if(event_handle != MOS_NULL_PTR)
-				{
-                    mos_enter_critial();
-                    {
-                        mos_idle_task_flag = 0;
-                    }
-                    mos_exit_critial();
-
-					event_handle(task_event.sender, task_event.event);
-				}	
-
+                }                					
+            }
+            else
+            {
                 mos_enter_critial();
                 {
-                    mos_idle_task_flag = 1;	
+                    if(daemon_task_count > 0)
+                    {
+                        if(++daemon_task_index >= daemon_task_count)
+                        {
+                            daemon_task_index = 0;
+                        }                    
+                    }
                 }
-                mos_exit_critial();		
+                mos_exit_critial(); 
+
+                for(index = 0, index_s = 0; index < MOS_MAX_TASK; index++)
+                {
+                    mos_enter_critial();
+                    {
+                        if(mos_task_controller[index].is_daemon_task == 1 && index_s == daemon_task_index)
+                        {
+                            event_handle = mos_task_controller[index].event_handle;
+                            mos_exit_critial();
+                            break;
+                        }                        
+                    }
+                    mos_exit_critial(); 
+                }              
             }
+
+            if(event_handle != MOS_NULL_PTR)
+            {
+                mos_enter_critial();
+                {
+                    mos_idle_task_flag = 0;
+                }
+                mos_exit_critial();
+
+                event_handle(task_event.sender, task_event.event);
+            }	
+
+            mos_enter_critial();
+            {
+                mos_idle_task_flag = 1;	
+            }
+            mos_exit_critial();	            
         }
     }
 
@@ -257,10 +301,43 @@ mos_task_id_t mos_kernel_task_create(mos_task_t task)
         else
         {
             task_id_count++;
+            mos_task_controller[task_id_count - 1].is_daemon_task = 0;
             mos_task_controller[task_id_count - 1].priority = task.priority;
             mos_task_controller[task_id_count - 1].init_handle = task.init_handle;
             mos_task_controller[task_id_count - 1].event_handle = task.event_handle;
             init_handle = task.init_handle;
+            ret = task_id_count - 1;
+        }
+    }
+    mos_exit_critial();    
+
+    if(ret >= 0)
+    {
+        init_handle();
+    }
+
+    return ret;
+}
+
+mos_task_id_t mos_kernel_daemon_task_create(mos_daemon_task_t task)
+{
+    mos_task_id_t ret = 0;    
+    mos_task_init_handle_t init_handle = MOS_NULL_PTR;
+
+    mos_enter_critial();
+    {
+        if(task_id_count >= MOS_MAX_TASK)
+        {
+            ret = -1;
+        }
+        else
+        {
+            task_id_count++;
+            mos_task_controller[task_id_count - 1].is_daemon_task = 1;
+            mos_task_controller[task_id_count - 1].init_handle = task.init_handle;
+            mos_task_controller[task_id_count - 1].event_handle = task.event_handle;
+            init_handle = task.init_handle;
+            daemon_task_count++;
             ret = task_id_count - 1;
         }
     }
@@ -298,6 +375,7 @@ mos_task_id_t mos_kernel_irq_create(mos_irq_t irq)
 mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver, mos_event_id_t event)
 {
     mos_s32_t ret = 0;
+    mos_s32_t is_daemon_task = 0;
     mos_evt_t task_event = { 0 };
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
 
@@ -310,29 +388,15 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
         task_event.event = event;
         task_event.sender = sender;
 
-        if(IS_IN_INTTERUPT())
+        mos_enter_critial();
         {
-            if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
-            {
-                ret = 0;
-            }
-            else
-            {
-                ret = -1;
-            }
+            is_daemon_task = mos_task_controller[receiver].is_daemon_task;
         }
-        else
+        mos_exit_critial();
+
+        if(is_daemon_task == 0)
         {
-            if(mos_task_controller[receiver].priority > mos_task_controller[sender].priority)
-            {
-                mos_enter_critial();
-                {
-                    event_handle = mos_task_controller[receiver].event_handle;
-                    ret = 0;
-                }
-                mos_exit_critial();  
-            }
-            else
+            if(IS_IN_INTTERUPT())
             {
                 if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
                 {
@@ -341,12 +405,38 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
                 else
                 {
                     ret = -1;
-                }                    
-            }                
-        }    
+                }
+            }
+            else
+            {
+                if(mos_task_controller[receiver].priority > mos_task_controller[sender].priority)
+                {
+                    mos_enter_critial();
+                    {
+                        event_handle = mos_task_controller[receiver].event_handle;
+                        ret = 0;
+                    }
+                    mos_exit_critial();  
+                }
+                else
+                {
+                    if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
+                    {
+                        ret = 0;
+                    }
+                    else
+                    {
+                        ret = -1;
+                    }                    
+                }                
+            }  
+        }
+        else
+        {
+            ret = -2;
+        }  
     }
      
-
     if(event_handle != MOS_NULL_PTR)
     {
 		mos_enter_critial();

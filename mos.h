@@ -46,6 +46,12 @@ typedef struct
 }mos_task_t;
 
 typedef struct
+{       
+    mos_task_init_handle_t init_handle;
+    mos_task_event_handle_t event_handle;
+}mos_daemon_task_t;
+
+typedef struct
 {
     mos_s32_t current;
     mos_s32_t minimum;
@@ -64,6 +70,7 @@ mos_s32_t mos_kernel_run(void);
 mos_s32_t mos_kernel_init(void);
 mos_task_id_t mos_kernel_irq_create(mos_irq_t irq);
 mos_task_id_t mos_kernel_task_create(mos_task_t task);
+mos_task_id_t mos_kernel_daemon_task_create(mos_daemon_task_t task);
 mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver, mos_event_id_t event);
 
 void mos_kernel_isr_switch_in(void);
