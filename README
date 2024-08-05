@@ -26,22 +26,17 @@ MOS is quite different from common commercial RTOS such as FreeRTOS or RT-Thread
 2.  File Tree
 
         mos
-        │  COPYING      ----------------------------------  GPL V3
-        │  mos.h        ----------------------------------  Top level header of mos
-        │  README       ----------------------------------  This file
-        │
-        ├─.vscode       ----------------------------------  Ignoring this folder for usging mos
-        │      c_cpp_properties.json
-        │      settings.json
-        │
-        ├─kernel
-        │      mos_kernel.c     --------------------------  mos kernel operations 
-        │      mos_kernel.h
-        │      mos_queue.c      --------------------------  Common queue functions of mos
-        │      mos_queue.h
-        │
-        └─ports
-                mos_ports.h     --------------------------  Hardware related portables 
+        ├── COPYING              --------------------------  GPL V3
+        ├── kernel
+        │   ├── mos_kernel.c     --------------------------  mos kernel operations 
+        │   ├── mos_kernel.h
+        │   ├── mos_queue.c      --------------------------  Common queue functions of mos
+        │   └── mos_queue.h
+        ├── mos.h                --------------------------  Top level header of mos
+        ├── ports
+        │   └── mos_ports.h      --------------------------  Hardware related portables 
+        ├── README               --------------------------  This file
+        └── samples              --------------------------  Samples folder
 
 3.  How-To-Use
 
@@ -64,25 +59,32 @@ MOS is quite different from common commercial RTOS such as FreeRTOS or RT-Thread
 
         A:  Call mos_kernel_init to initialize mos kernel. Successfully if return 0.
 
-        B:  Create tasks by calling mos_kernel_task_create. For each task, only three members should be identified:
+        B:  Create normal tasks by calling mos_kernel_task_create. For each task, only three members should be identified:
 
             priority:       task priority, min = 0, max = MAX(INT32). larger number means higher task priority.
             init_handle:    initial function for task, it is called once successing to create a task
             event_handle:   core implementation of task, it must be a Run-To-Complete function instead of endless-loops 
 
-            Once successing to create a task, a unique task id will be assigned and returned, otherwise, negative number will return.           
+            Once successing to create a task, a unique task id will be assigned and returned, otherwise, negative number will return.     
 
-        C:  Register IRQs to mos kernel by calling mos_kernel_irq_create. 
+        C:  Create daemon tasks by calling mos_kernel_daemon_task_create. For each task, only three members should be identified:
+
+            init_handle:    initial function for task, it is called once successing to create a task
+            event_handle:   core implementation of task, it must be a Run-To-Complete function instead of endless-loops 
+
+            Once successing to create a task, a unique task id will be assigned and returned, otherwise, negative number will return.                   
+
+        D:  Register IRQs to mos kernel by calling mos_kernel_irq_create. 
 
             Once successing to register, a unique task id will be assigned and returned, otherwise, negative number will return. 
             
 
-        D: Call mos_kernel_run to start mos scheduling
+        E: Call mos_kernel_run to start mos scheduling
 
 
     3.5 Publish event to tasks
 
-        Call mos_kernel_event_publish from Wherever you want to publish a event to specified task.
+        Call mos_kernel_event_publish from Wherever you want to publish a event to specified task. This api only call be used for normal task.
 
 4.  Issues or bugs report
 
