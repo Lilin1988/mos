@@ -39,22 +39,83 @@ static mos_s32_t irq_nest_count = 0;
 static mos_task_id_t task_id_count = 0;
 static mos_task_ctl_t mos_task_controller[MOS_MAX_TASK] = { 0 };
 
+static mos_u32_t mos_idle_task_flag = 0;
+static mos_u32_t mos_idle_task_flag_save = 0;
+static mos_cpu_usage_t mos_cpu_usage = { 0 };
+
 void mos_enter_critial(void)
 {
-    MOS_EN_IRQ();
+	MOS_DIS_IRQ();
     irq_nest_count++;
 }
 
 void mos_exit_critial(void)
 {
-    MOS_EN_IRQ();
+    MOS_DIS_IRQ();
     {
         if(--irq_nest_count <= 0)
         {
             irq_nest_count = 0;
-            MOS_DIS_IRQ();
+            MOS_EN_IRQ();
         }
     }
+}
+
+void mos_kernel_isr_switch_in(void)
+{
+    mos_enter_critial();
+    {
+        mos_idle_task_flag_save = mos_idle_task_flag;
+        mos_idle_task_flag = 0;
+    }
+    mos_exit_critial();
+}
+
+void mos_kernel_isr_switch_out(void)
+{
+    mos_enter_critial();
+    {
+        if(mos_idle_task_flag_save == 1)
+        {
+            mos_idle_task_flag = 0;
+        }
+    }
+    mos_exit_critial();
+}
+
+void mos_kernel_cpu_usage_monitor(void)
+{
+    static mos_u32_t idle_time = 0;
+    static mos_u32_t monitor_tick = 0;
+
+    mos_enter_critial();
+    {
+        if(++monitor_tick >= 1000)
+        {
+            monitor_tick = 0;
+
+            mos_cpu_usage.current = 1000 - idle_time * 1000 / 1000;
+
+            if(mos_cpu_usage.current >= mos_cpu_usage.maximum)
+            {
+                mos_cpu_usage.maximum = mos_cpu_usage.current;
+            }
+            else if(mos_cpu_usage.current <= mos_cpu_usage.minimum)
+            {
+                mos_cpu_usage.minimum = mos_cpu_usage.current;
+            }
+
+            idle_time = 0;
+        }
+        else
+        {
+            if(mos_idle_task_flag == 1)
+            {
+                idle_time++;
+            }
+        }
+    }
+    mos_exit_critial(); 
 }
 
 mos_s32_t mos_kernel_init(void)
@@ -65,6 +126,11 @@ mos_s32_t mos_kernel_init(void)
     mos_enter_critial();
     {
         task_id_count = 0;
+
+        mos_idle_task_flag = 0;
+        mos_cpu_usage.current = 0;
+        mos_cpu_usage.minimum = 0xffff;
+        mos_cpu_usage.maximum = 0;
 
         for(index = 0; index < MOS_MAX_TASK; index++)
         {
@@ -114,39 +180,51 @@ mos_s32_t mos_kernel_run(void)
             task_id = -1;
             task_priority = 0;
 
-            mos_enter_critial();
+            for(index = 0; index < MOS_MAX_TASK; index++)
             {
-                for(index = 0; index < MOS_MAX_TASK; index++)
+                if(mos_queue_try_pop(&mos_task_controller[index].events, &task_event, sizeof(mos_evt_t)) == 0)
                 {
-                    if(mos_queue_try_pop(&mos_task_controller[index].events, &task_event, sizeof(mos_evt_t)) == 0)
-                    {
+                    mos_enter_critial();
+                    {                    
                         if(mos_task_controller[index].priority >= task_priority)
                         {
                             task_id = index;
                             task_priority = mos_task_controller[index].priority;
                         }
                     }
+                    mos_exit_critial();                    
                 }
             }
-            mos_exit_critial();
-
 			
             if(task_id >= 0)
             {
                 event_handle = MOS_NULL_PTR;
-                mos_enter_critial();
+
+                if(mos_queue_pop(&mos_task_controller[task_id].events, &task_event, sizeof(mos_evt_t)) == 0)
                 {
-                    if(mos_queue_pop(&mos_task_controller[task_id].events, &task_event, sizeof(mos_evt_t)) == 0)
-                    {
+                    mos_enter_critial();
+                    {                    
                         event_handle = mos_task_controller[task_id].event_handle;
                     }
-                }
-                mos_exit_critial();
+                    mos_exit_critial();
+                }                
 				
 				if(event_handle != MOS_NULL_PTR)
 				{
+                    mos_enter_critial();
+                    {
+                        mos_idle_task_flag = 0;
+                    }
+                    mos_exit_critial();
+
 					event_handle(task_event.sender, task_event.event);
-				}				
+				}	
+
+                mos_enter_critial();
+                {
+                    mos_idle_task_flag = 1;	
+                }
+                mos_exit_critial();		
             }
         }
     }
@@ -213,18 +291,38 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
     mos_evt_t task_event = { 0 };
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
 
-    mos_enter_critial();
+    if(receiver >= task_id_count || sender >= task_id_count)
     {
-        if(receiver >= task_id_count || sender >= task_id_count)
+        ret = -1;
+    }
+    else
+    {
+        task_event.event = event;
+        task_event.sender = sender;
+
+        if(IS_IN_INTTERUPT())
         {
-            ret = -1;
+            if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
+            {
+                ret = 0;
+            }
+            else
+            {
+                ret = -1;
+            }
         }
         else
         {
-            task_event.event = event;
-            task_event.sender = sender;
-
-            if(IS_IN_INTTERUPT())
+            if(mos_task_controller[receiver].priority > mos_task_controller[sender].priority)
+            {
+                mos_enter_critial();
+                {
+                    event_handle = mos_task_controller[receiver].event_handle;
+                    ret = 0;
+                }
+                mos_exit_critial();  
+            }
+            else
             {
                 if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
                 {
@@ -233,34 +331,27 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
                 else
                 {
                     ret = -1;
-                }
-            }
-            else
-            {
-                if(mos_task_controller[receiver].priority > mos_task_controller[sender].priority)
-                {
-                    event_handle = mos_task_controller[receiver].event_handle;
-                    ret = 0;
-                }
-                else
-                {
-                    if(mos_queue_push(&mos_task_controller[receiver].events, &task_event, sizeof(task_event)) == 0)
-                    {
-                        ret = 0;
-                    }
-                    else
-                    {
-                        ret = -1;
-                    }                    
-                }                
-            }
-        }
+                }                    
+            }                
+        }    
     }
-    mos_exit_critial();   
+     
 
     if(event_handle != MOS_NULL_PTR)
     {
+		mos_enter_critial();
+		{
+			mos_idle_task_flag = 0;
+		}
+		mos_exit_critial();	
+		
         event_handle(sender, event);
+		
+		mos_enter_critial();
+		{
+			mos_idle_task_flag = 1;
+		}
+		mos_exit_critial();			
     }
 
     return ret;

@@ -31,7 +31,7 @@ typedef mos_s32_t   mos_event_id_t;
 
 typedef void (*mos_task_init_handle_t)(void);
 typedef void (*mos_task_event_handle_t)(mos_task_id_t sender, mos_event_id_t evt);
-
+typedef void (*mos_kernel_tick_handle_t)(void);
 
 typedef struct
 {
@@ -44,6 +44,13 @@ typedef struct
     mos_task_init_handle_t init_handle;
     mos_task_event_handle_t event_handle;
 }mos_task_t;
+
+typedef struct
+{
+    mos_s32_t current;
+    mos_s32_t minimum;
+    mos_s32_t maximum;
+}mos_cpu_usage_t;
 
 void mos_exit_critial(void);
 void mos_enter_critial(void);
@@ -58,4 +65,9 @@ mos_s32_t mos_kernel_init(void);
 mos_task_id_t mos_kernel_irq_create(mos_irq_t irq);
 mos_task_id_t mos_kernel_task_create(mos_task_t task);
 mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver, mos_event_id_t event);
+
+void mos_kernel_isr_switch_in(void);
+void mos_kernel_isr_switch_out(void);
+void mos_kernel_cpu_usage_monitor(void);
+
 #endif
