@@ -38,6 +38,7 @@ typedef struct
 
 static mos_s32_t irq_nest_count = 0;
 static mos_task_id_t task_id_count = 0;
+static mos_s32_t daemon_task_index = 0;
 static mos_s32_t daemon_task_count = 0;
 static mos_task_ctl_t mos_task_controller[MOS_MAX_TASK] = { 0 };
 
@@ -145,6 +146,9 @@ mos_s32_t mos_kernel_init(void)
         mos_cpu_usage.current = 0;
         mos_cpu_usage.minimum = 0xffff;
         mos_cpu_usage.maximum = 0;
+		
+		daemon_task_index = 0;
+		daemon_task_count = 0;
 
         for(index = 0; index < MOS_MAX_TASK; index++)
         {
@@ -176,8 +180,7 @@ mos_s32_t mos_kernel_run(void)
     mos_s32_t task_count = 0;
     mos_task_id_t task_id = 0;
     mos_evt_t task_event = { 0 }; 
-    mos_s32_t is_daemon_task = 0;
-    mos_s32_t daemon_task_index = 0;   
+    mos_s32_t is_daemon_task = 0;      
     mos_task_pri_t task_priority = 0;
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
 
@@ -254,13 +257,20 @@ mos_s32_t mos_kernel_run(void)
                 {
                     mos_enter_critial();
                     {
-                        if(mos_task_controller[index].is_daemon_task == 1 && index_s == daemon_task_index)
+                        if(mos_task_controller[index].is_daemon_task == 1)
                         {
-                            event_handle = mos_task_controller[index].event_handle;
-                            mos_exit_critial();
-                            break;
-                        }                        
-                    }
+							if(index_s == daemon_task_index)
+							{
+								event_handle = mos_task_controller[index].event_handle;
+								mos_exit_critial();	
+								break;
+							}
+							else
+							{
+								index_s++;
+							}                            
+                        }
+					}						
                     mos_exit_critial(); 
                 }              
             }
