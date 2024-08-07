@@ -1,8 +1,8 @@
 /*
-    <one line to give the program's name and a brief idea of what it does.>
+    <Header of kernel on the top level which is part of mos(micro-kernel operation system).>
     Copyright (C) <2024>  <LL2524460@qq.com, Phone: 139-8424-5508>
 
-    This file is part of mos(medical operation system) is free software: you can redistribute it and/or modify
+    This file is part of mos(micro-kernel operation system) is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or any later version.
 

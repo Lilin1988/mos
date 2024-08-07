@@ -1,5 +1,5 @@
 /*
-    <Thread safe queue operation of mos(medical operation system) to support common queue functions.>
+    <Thread safe queue operation of mos(micro-kernel operation system) to support common queue functions.>
     Copyright (C) <2024>  <LL2524460@qq.com, Phone: 139-8424-5508>
 
     This file is part of mos(medical operation system) is free software: you can redistribute it and/or modify

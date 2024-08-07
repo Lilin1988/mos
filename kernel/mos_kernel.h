@@ -1,5 +1,5 @@
 /*
-    <Header of mos_kernel.c which is part of mos(medical operation system).>
+    <Header of mos_kernel.c which is part of mos(micro-kernel operation system).>
     Copyright (C) <2024>  <LL2524460@qq.com, Phone: 139-8424-5508>
 
     This file is part of mos(medical operation system) is free software: you can redistribute it and/or modify
