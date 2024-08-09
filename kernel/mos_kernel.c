@@ -1,5 +1,5 @@
 /*
-    <Kernel of mos(medical operation system) to support all kernel and task related operation.>
+    <Kernel of mos(micro-kernel operation system) to support all kernel and task related operation.>
     Copyright (C) <2024>  <LL2524460@qq.com, Phone: 139-8424-5508>
 
     This file is part of mos(medical operation system) is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ typedef struct
     mos_s32_t is_daemon_task;      
     mos_task_init_handle_t init_handle;
     mos_task_event_handle_t event_handle;
+    mos_daemon_task_event_handle_t daemon_event_handle;
     mos_evt_t events_buffer[MOS_MAX_EVENT];    
 }mos_task_ctl_t;
 
@@ -44,7 +45,10 @@ static mos_task_ctl_t mos_task_controller[MOS_MAX_TASK] = { 0 };
 
 static mos_u32_t mos_idle_task_flag = 0;
 static mos_u32_t mos_idle_task_flag_save = 0;
+static mos_task_idle_hook_t mos_idle_task_hook = MOS_NULL_PTR;
+
 static mos_cpu_usage_t mos_cpu_usage = { 0 };
+
 
 void mos_enter_critial(void)
 {
@@ -156,6 +160,7 @@ mos_s32_t mos_kernel_init(void)
             mos_task_controller[index].is_daemon_task = 0;
             mos_task_controller[index].init_handle = MOS_NULL_PTR;
             mos_task_controller[index].event_handle = MOS_NULL_PTR;
+            mos_task_controller[index].daemon_event_handle = MOS_NULL_PTR;
 
             ret = mos_queue_init(&mos_task_controller[index].events, 
                                  mos_task_controller[index].events_buffer,
@@ -182,7 +187,9 @@ mos_s32_t mos_kernel_run(void)
     mos_evt_t task_event = { 0 }; 
     mos_s32_t is_daemon_task = 0;      
     mos_task_pri_t task_priority = 0;
+    mos_task_idle_hook_t idle_hook = MOS_NULL_PTR;
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
+    mos_daemon_task_event_handle_t daemon_event_handle = MOS_NULL_PTR;
 
     mos_enter_critial();
     {
@@ -237,7 +244,18 @@ mos_s32_t mos_kernel_run(void)
                         event_handle = mos_task_controller[task_id].event_handle;
                     }
                     mos_exit_critial();
-                }                					
+                } 
+
+                if(event_handle != MOS_NULL_PTR)
+                {
+                    mos_enter_critial();
+                    {
+                        mos_idle_task_flag = 0;
+                    }
+                    mos_exit_critial();
+
+                    event_handle(task_event.sender, task_event.event);
+                }	                               					
             }
             else
             {
@@ -261,7 +279,7 @@ mos_s32_t mos_kernel_run(void)
                         {
 							if(index_s == daemon_task_index)
 							{
-								event_handle = mos_task_controller[index].event_handle;
+								daemon_event_handle = mos_task_controller[index].daemon_event_handle;
 								mos_exit_critial();	
 								break;
 							}
@@ -272,25 +290,36 @@ mos_s32_t mos_kernel_run(void)
                         }
 					}						
                     mos_exit_critial(); 
-                }              
-            }
+                } 
 
-            if(event_handle != MOS_NULL_PTR)
-            {
-                mos_enter_critial();
+                if(daemon_event_handle != MOS_NULL_PTR)
                 {
-                    mos_idle_task_flag = 0;
-                }
-                mos_exit_critial();
+                    mos_enter_critial();
+                    {
+                        mos_idle_task_flag = 0;
+                    }
+                    mos_exit_critial();
 
-                event_handle(task_event.sender, task_event.event);
-            }	
+                    daemon_event_handle();
+                }	                             
+            }
 
             mos_enter_critial();
             {
                 mos_idle_task_flag = 1;	
             }
-            mos_exit_critial();	            
+            mos_exit_critial();	   
+
+            mos_enter_critial();
+            {
+                idle_hook = mos_idle_task_hook;
+            }
+            mos_exit_critial();	  
+
+            if(idle_hook != MOS_NULL_PTR)
+            {
+                idle_hook();
+            }         
         }
     }
 
@@ -315,6 +344,7 @@ mos_task_id_t mos_kernel_task_create(mos_task_t task)
             mos_task_controller[task_id_count - 1].priority = task.priority;
             mos_task_controller[task_id_count - 1].init_handle = task.init_handle;
             mos_task_controller[task_id_count - 1].event_handle = task.event_handle;
+            mos_task_controller[task_id_count - 1].daemon_event_handle = MOS_NULL_PTR;
             init_handle = task.init_handle;
             ret = task_id_count - 1;
         }
@@ -323,7 +353,10 @@ mos_task_id_t mos_kernel_task_create(mos_task_t task)
 
     if(ret >= 0)
     {
-        init_handle();
+        if(init_handle != MOS_NULL_PTR)
+        {
+            init_handle();
+        }        
     }
 
     return ret;
@@ -344,8 +377,10 @@ mos_task_id_t mos_kernel_daemon_task_create(mos_daemon_task_t task)
         {
             task_id_count++;
             mos_task_controller[task_id_count - 1].is_daemon_task = 1;
+            mos_task_controller[task_id_count - 1].priority = -1;
             mos_task_controller[task_id_count - 1].init_handle = task.init_handle;
-            mos_task_controller[task_id_count - 1].event_handle = task.event_handle;
+            mos_task_controller[task_id_count - 1].event_handle = MOS_NULL_PTR;
+            mos_task_controller[task_id_count - 1].daemon_event_handle = task.daemon_event_handle;
             init_handle = task.init_handle;
             daemon_task_count++;
             ret = task_id_count - 1;
@@ -355,7 +390,10 @@ mos_task_id_t mos_kernel_daemon_task_create(mos_daemon_task_t task)
 
     if(ret >= 0)
     {
-        init_handle();
+        if(init_handle != MOS_NULL_PTR)
+        {
+            init_handle();
+        }  
     }
 
     return ret;
@@ -388,6 +426,7 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
     mos_s32_t is_daemon_task = 0;
     mos_evt_t task_event = { 0 };
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
+    mos_daemon_task_event_handle_t daemon_event_handle = MOS_NULL_PTR;
 
     if(receiver >= task_id_count || sender >= task_id_count)
     {
@@ -469,6 +508,28 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
 			mos_idle_task_flag = 1;
 		}
 		mos_exit_critial();			
+    }
+
+    return ret;
+}
+
+mos_s32_t mos_kernel_register_idle_hook(mos_task_idle_hook_t idle_hook)
+{
+    mos_s32_t ret = 0;
+
+    if(idle_hook != MOS_NULL_PTR)
+    {
+		mos_enter_critial();
+		{
+			mos_idle_task_hook = idle_hook;
+		}
+		mos_exit_critial();	
+
+        ret = 0;
+    }
+    else
+    {
+        ret = -1;
     }
 
     return ret;

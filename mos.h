@@ -30,6 +30,8 @@ typedef mos_u32_t   mos_task_pri_t;
 typedef mos_s32_t   mos_event_id_t;
 
 typedef void (*mos_task_init_handle_t)(void);
+typedef void (*mos_task_idle_hook_t)(void);
+typedef void (*mos_daemon_task_event_handle_t)(void);
 typedef void (*mos_task_event_handle_t)(mos_task_id_t sender, mos_event_id_t evt);
 typedef void (*mos_kernel_tick_handle_t)(void);
 
@@ -48,7 +50,7 @@ typedef struct
 typedef struct
 {       
     mos_task_init_handle_t init_handle;
-    mos_task_event_handle_t event_handle;
+    mos_daemon_task_event_handle_t daemon_event_handle;
 }mos_daemon_task_t;
 
 typedef struct
@@ -71,6 +73,7 @@ mos_s32_t mos_kernel_init(void);
 mos_task_id_t mos_kernel_irq_create(mos_irq_t irq);
 mos_task_id_t mos_kernel_task_create(mos_task_t task);
 mos_task_id_t mos_kernel_daemon_task_create(mos_daemon_task_t task);
+mos_s32_t mos_kernel_register_idle_hook(mos_task_idle_hook_t idle_hook);
 mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver, mos_event_id_t event);
 
 void mos_kernel_isr_switch_in(void);
