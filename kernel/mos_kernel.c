@@ -82,10 +82,7 @@ void mos_kernel_isr_switch_out(void)
 {
     mos_enter_critial();
     {
-        if(mos_idle_task_flag_save == 1)
-        {
-            mos_idle_task_flag = 0;
-        }
+        mos_idle_task_flag = mos_idle_task_flag_save;
     }
     mos_exit_critial();
 }
