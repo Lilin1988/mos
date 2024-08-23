@@ -181,8 +181,9 @@ mos_s32_t mos_kernel_run(void)
     mos_s32_t index_s = 0;   
     mos_s32_t task_count = 0;
     mos_task_id_t task_id = 0;
+	mos_s32_t schedule_idle = 0;
     mos_evt_t task_event = { 0 }; 
-    mos_s32_t is_daemon_task = 0;      
+    mos_s32_t is_daemon_task = 0;    	
     mos_task_pri_t task_priority = 0;
     mos_task_idle_hook_t idle_hook = MOS_NULL_PTR;
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
@@ -252,6 +253,8 @@ mos_s32_t mos_kernel_run(void)
                     mos_exit_critial();
 
                     event_handle(task_event.sender, task_event.event);
+					
+					continue;
                 }	                               					
             }
             else
@@ -260,63 +263,97 @@ mos_s32_t mos_kernel_run(void)
                 {
                     if(daemon_task_count > 0)
                     {
-                        if(++daemon_task_index >= daemon_task_count)
+                        if(daemon_task_index >= daemon_task_count)
                         {
-                            daemon_task_index = 0;
-                        }                    
+                            schedule_idle = 1;
+                        } 
+						else
+						{
+							schedule_idle = 0;
+						}
                     }
+					else
+					{
+						schedule_idle = 1;
+					}
                 }
                 mos_exit_critial(); 
+				
+				if(schedule_idle == 1)
+				{
+					mos_enter_critial();
+					{
+						mos_idle_task_flag = 1;	
+					}
+					mos_exit_critial();	   
 
-                for(index = 0, index_s = 0; index < MOS_MAX_TASK; index++)
-                {
-                    mos_enter_critial();
-                    {
-                        if(mos_task_controller[index].is_daemon_task == 1)
-                        {
-							if(index_s == daemon_task_index)
+					mos_enter_critial();
+					{
+						idle_hook = mos_idle_task_hook;
+					}
+					mos_exit_critial();	  
+
+					if(idle_hook != MOS_NULL_PTR)
+					{
+						idle_hook();
+					} 					
+				}
+				else
+				{
+					for(index = 0, index_s = 0; index < MOS_MAX_TASK; index++)
+					{
+						mos_enter_critial();
+						{
+							if(mos_task_controller[index].is_daemon_task == 1)
 							{
-								daemon_event_handle = mos_task_controller[index].daemon_event_handle;
-								mos_exit_critial();	
-								break;
+								if(index_s == daemon_task_index)
+								{
+									daemon_event_handle = mos_task_controller[index].daemon_event_handle;
+									mos_exit_critial();	
+									break;
+								}
+								else
+								{
+									index_s++;
+								}                            
 							}
-							else
-							{
-								index_s++;
-							}                            
-                        }
-					}						
-                    mos_exit_critial(); 
-                } 
+						}						
+						mos_exit_critial(); 
+					} 
 
-                if(daemon_event_handle != MOS_NULL_PTR)
+					if(daemon_event_handle != MOS_NULL_PTR)
+					{
+						mos_enter_critial();
+						{
+							mos_idle_task_flag = 0;
+						}
+						mos_exit_critial();
+
+						daemon_event_handle();
+					}					
+				}
+
+                mos_enter_critial();
                 {
-                    mos_enter_critial();
+                    if(daemon_task_count > 0)
                     {
-                        mos_idle_task_flag = 0;
+                        if(daemon_task_index >= daemon_task_count)
+                        {
+                            daemon_task_index = 0;
+                        } 
+						else
+						{
+							daemon_task_index++;
+						}
                     }
-                    mos_exit_critial();
-
-                    daemon_event_handle();
-                }	                             
-            }
-
-            mos_enter_critial();
-            {
-                mos_idle_task_flag = 1;	
-            }
-            mos_exit_critial();	   
-
-            mos_enter_critial();
-            {
-                idle_hook = mos_idle_task_hook;
-            }
-            mos_exit_critial();	  
-
-            if(idle_hook != MOS_NULL_PTR)
-            {
-                idle_hook();
-            }         
+					else
+					{
+						daemon_task_index = 0;
+					}
+                }
+                mos_exit_critial(); 				
+	                             
+            }        
         }
     }
 
