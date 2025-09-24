@@ -433,7 +433,7 @@ mos_task_id_t mos_kernel_daemon_task_create(mos_daemon_task_t task)
     return ret;
 }
 
-mos_task_id_t mos_kernel_irq_create(mos_irq_t irq)
+mos_task_id_t mos_kernel_irq_create(void)
 {
     mos_task_id_t ret = 0;    
 
@@ -460,7 +460,6 @@ mos_s32_t mos_kernel_event_publish(mos_task_id_t sender, mos_task_id_t receiver,
     mos_s32_t is_daemon_task = 0;
     mos_evt_t task_event = { 0 };
     mos_task_event_handle_t event_handle = MOS_NULL_PTR;
-    mos_daemon_task_event_handle_t daemon_event_handle = MOS_NULL_PTR;
 
     if(receiver >= task_id_count || sender >= task_id_count)
     {

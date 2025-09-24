@@ -70,7 +70,7 @@ mos_s32_t mos_queue_try_pop(mos_queue_t *queue, void *buffer, mos_s32_t size);
 
 mos_s32_t mos_kernel_run(void);
 mos_s32_t mos_kernel_init(void);
-mos_task_id_t mos_kernel_irq_create(mos_irq_t irq);
+mos_task_id_t mos_kernel_irq_create(void);
 mos_task_id_t mos_kernel_task_create(mos_task_t task);
 mos_task_id_t mos_kernel_daemon_task_create(mos_daemon_task_t task);
 mos_s32_t mos_kernel_register_idle_hook(mos_task_idle_hook_t idle_hook);
